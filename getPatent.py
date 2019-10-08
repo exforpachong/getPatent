@@ -12,6 +12,11 @@ import requests
 import os
 import pyautogui
 
+#输入默认的全局参数
+fileName = '数据总表-深市沪市去重后数据汇总 - 合并为一个表.xlsx'   #需要处理的文件名
+fileSave = 'results.txt'   #保存结果的文件名
+waitSecond = 10   #这里设置载入一个页面等待页面响应的最大时间
+
 def init_browser():   #初始化浏览器的函数，该函数的作用是配置请求的用户浏览器信息，以及用户信息
     chromeOptions = webdriver.ChromeOptions()
     # 设置代理
@@ -51,14 +56,25 @@ def getYearNumByXPath(browser,xpath):
         data += [y_n.strip()]  #方式二
     return data
 
-fileSave = 'results.txt'   #保存结果的文件名
-waitSecond = 10   #这里设置载入一个页面等待页面响应的最大时间
-
 def save(content):
     with open(fileSave,'a+') as f:
         f.write(content[0]+'\t'+content[1]+'\t'+content[2]+'\t'+content[3]+'\t'+content[4]+'\n')
 
 if __name__ == '__main__':
+    dataPD = pd.read_excel(fileName, sheet_name='汇总表')
+    company_names = list(dataPD['被参控公司'].values)
+    try:
+        with open(fileSave, 'r') as f:
+            lines = f.readlines()
+            name = lines[-1].split('\t')[0]
+        w = company_names.index(name)
+        print('已经搜索到['+company_names[w]+']，从['+company_names[w+1]+']开始检索')
+    except Exception as e:
+        print(e)
+        print('没有检索匹配到公司名称，从头开始搜索！')
+        w = -1
+    company_names = company_names[w + 1:]
+
     url = 'http://pss-system.cnipa.gov.cn/sipopublicsearch/patentsearch/tableSearch-showTableSearchIndex.shtml'
     browser = init_browser()  # 初始化浏览器，配置请求的用户浏览器信息，以及用户信息
     browser.get(url)  # 进入主页
@@ -66,9 +82,10 @@ if __name__ == '__main__':
     time.sleep(10)  # 打开浏览器的瞬间需要手动登录，所以等待了10s，主要手速要快，否则这里设置时间长一点！
     print('begin to search!')
 
-    company_names = ['平安银行股份有限公司','万科企业股份有限公司','上海凌云实业发展股份有限公司']
+    # company_names = ['平安银行股份有限公司','万科企业股份有限公司','上海凌云实业发展股份有限公司']
     for company_name in company_names:
         try:
+            browser.refresh()  # 刷新当前页面准备下一次搜索
             #寻找输入框并输入需要搜索的公司名称
             xpath_input = '//*[@id="tableSearchItemIdIVDB020"]'   #申请（专利权）人的XPath
             WebDriverWait(browser, waitSecond, 0.5).until(EC.presence_of_element_located((By.XPATH, xpath_input)))  #等待’申请（专利权）人‘出现
@@ -92,7 +109,6 @@ if __name__ == '__main__':
             # print(publicData)
             save([company_name,'申请日统计', '-'.join(applyData),'公开日统计', '-'.join(publicData)])
 
-            browser.refresh()  #刷新当前页面准备下一次搜索
             # print('finished!')
         except Exception as e:
             print(e)
